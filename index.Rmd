@@ -1,0 +1,393 @@
+---
+title: <FONT COLOR="Yellow">"DELITOS EN ESPAÑA. EVOLUCIÓN Y EFECTOS DE LA PANDEMIA SOBRE EL NÚMERO TOTAL DE INFRACCIONES PENALES REGISTRADAS "</FONT> 
+author: "Hugo Moneo Hernández (humoher@alumni.uv.es)"  
+date: "Enero de 2020 (actualizado el `r format(Sys.time(), '%d-%m-%Y')`)"
+output:
+  html_document:
+    theme: darkly
+    highlight: textmate 
+    toc: true
+    toc_depth: 3 
+    toc_float: 
+      collapsed: true
+      smooth_scroll: true
+    self_contained: true
+    number_sections: false
+    df_print: kable
+    code_download: true
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r packages-setup, include = FALSE}
+library(tidyverse)
+library(klippy)
+library(knitr)
+library(RColorBrewer)
+library(tibble)
+library(ggthemes)
+library(ggplot2)
+library(dplyr)
+library(patchwork)
+library(ggrepel)
+library(sf)
+library(ggspatial)
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(plotly)
+library(gganimate)
+library (gifski)
+library(gt)
+library(kableExtra)
+library(DT)
+library(leaflet) 
+library(leafem) 
+```
+
+```{r chunk-setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, eval = TRUE, message = FALSE, warning = FALSE, 
+                      #results = "hold",
+                      cache = FALSE, cache.path = "/caches/", comment = "#>",
+                      #fig.width = 7, #fig.height= 7,   
+                      #out.width = 7, out.height = 7,
+                      collapse = TRUE,  fig.show = "hold",
+                      fig.asp = 7/9, out.width = "60%", fig.align = "center")
+knitr::opts_chunk$set(dev = "png", dev.args = list(type = "cairo-png"))
+```
+
+```{r options-setup, include = FALSE}
+options(scipen = 999) #- para quitar la notación científica
+options("yaml.eval.expr" = TRUE) 
+```
+
+
+```{r klippy, echo = FALSE}
+klippy::klippy(position = c("top", "right")) #- remotes::install_github("rlesur/klippy")
+```
+
+-----------------
+
+<div style="text-align: justify">Trabajo  elaborado para la asignatura "Programación y manejo de datos en la era del Big Data" de la Universitat de València durante el curso 2020-2021. La página web de la asignatura puede verse aquí: <https://perezp44.github.io/intro-ds-20-21-web/>. Los trabajos de mis compañeros de curso pueden verse [aquí](https://perezp44.github.io/intro-ds-20-21-web/07-trabajos.html).<div/>
+
+---------------
+
+<br>
+
+# <FONT COLOR="Yellow">1. Introducción </FONT>
+## <FONT COLOR="Yellow">1.1. ¿Qué son los delitos? </FONT>
+
+```{r eval = TRUE, echo = FALSE}
+knitr::include_graphics(here::here("imagenes", "imagen1.jpg")  )
+```
+
+<div style="text-align: justify">
+
+La Rae define delito como “Acción u omisión voluntaria o imprudente penada por la ley” o como Culpa, quebrantamiento de la ley. Los delitos son por tanto, acciones que van en contra de lo establecido por la ley y que son castigados por ella con una pena grave. En este trabajo queremos ver que tendencia ha seguido el número de delitos durante los últimos años , a nivel nacional, atendiendo a la tipología penal, años y regiones. Así de ver como ha influido sobre el número de delitos registrados las restricciones a la movilidad y el confinamiento que se apodero de gran parte del pasado año 2020.  **LO VEMOS**. 
+
+<div/>
+
+
+# <FONT COLOR="yellow">2. ¿De dónde provienen los datos? </FONT>
+
+<div style="text-align: justify">
+
+Los datos recabados para este trabajo pertenecen al ministerio de interior del gobierno de España, y se pueden encontrar en el portal estadístico de criminalidad que se aloja en su web.
+
+Para el año 2020 la información esta actualizada para los 9 primeros meses, desde Enero hasta Septiembre. Pero nos permite generar una visión clara sobre la tendencia y el impacto de la pandemia en el número de infracciones cometidas.
+
+[enlace al portal estadístico de criminalidad](https://estadisticasdecriminalidad.ses.mir.es/publico/portalestadistico/)
+
+```{r eval = TRUE, echo = FALSE}
+knitr::include_graphics(here::here("imagenes", "ministerio.png")  )
+```
+
+## <FONT COLOR="Yellow">2.2. Evolución de los delitos en España. </FONT>
+
+<div style="text-align: justify">
+
+Para poner precedentes sobre la evolución y entender el impacto de la pandemia sobre el numero de delitos es necesario primero estudiar la tendencia que han seguido en nuestro país a lo largo de anteriores años. 
+
+Esta tabla muestra la evolución de los delitos en España desde el año 2010 hasta el 2019 (años que tienen la evolución completa de los 12 meses) atendiendo a la tipología penal. 
+
+```{r eval = TRUE, echo = TRUE}
+#cargamos los datos 
+EvolucionDelitosESP <-  rio::import("./datos/EvolucionESP.csv")
+#seleccionamos los datos que nos interesa mostrar 
+dfEvolucionDelitos <- EvolucionDelitosESP %>% select(`Total Nacional`,`A2019`, `A2018`,`A2017`,`A2016`,`A2015`, `A2014`, `A2013`, `A2012` , `A2011`, `A2010`)
+
+dfEvolucionDelitos %>% DT::datatable(extensions = 'Buttons', 
+                               options = list(dom = 'Blfrtip', 
+                                              buttons = c('copy', 'csv', 'excel', 'pdf', 'print'), 
+                                              pageLength = 5, autoWidth = TRUE ))
+
+```
+A continuación, se muestra una tabla con el total de Infracciones Penales de cada año (la suma de todos los delitos cometidos durante el año con independencia de la tipología penal). Podemos observar que la tendencia de los últimos 4 años es ascendente pero si observamos en la tabla interactiva de arriba , el 2016 venía precedido de una caída notable en el número de delitos, por lo que para 2019 con 411903 infracciones penales cometidas todavía no se han alcanzado las 461042 que se registraron en 2010. Si bien es cierto que para el 2020 se ha experimentado una fuerte caída como veremos a continuación. 
+```{r eval = TRUE, echo = TRUE}
+#cargamos los datos
+EvolucionDelitosESP <-  rio::import("./datos/EvolucionESP.csv")
+#filtramos para mostrar el total de infracciones de cada año desde 2016 hasta 2019.
+TotalInfracciones19 <- EvolucionDelitosESP %>% slice_max(A2019, n=1) %>% select("Total Nacional","A2019") 
+TotalInfracciones18 <- EvolucionDelitosESP %>% slice_max(A2018, n=1) %>% select("Total Nacional","A2018")
+TotalInfracciones17 <- EvolucionDelitosESP %>% slice_max(A2017, n=1) %>% select("Total Nacional","A2017")
+TotalInfracciones16 <- EvolucionDelitosESP %>% slice_max(A2016, n=1) %>% select("Total Nacional","A2016")
+#precargamos la imagen para incorporarla en las tablas 
+ImagenDelitos <- "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9a/Flag_of_Spain.svg/1200px-Flag_of_Spain.svg.png"
+
+Tabla_TotalInfracciones19 <- TotalInfracciones19 %>% gt()
+
+Tabla_TotalInfracciones19 <- TotalInfracciones19 %>% add_column(ImagenDelitos) %>% 
+  select("Total Nacional", "A2019" , "ImagenDelitos") %>% ungroup()
+
+Tabla_TotalInfracciones19 %>% gt() %>% 
+  gt::text_transform(locations = cells_body(columns = vars(ImagenDelitos)),
+                     fn = function(x) {gt::web_image(x, height = 50)}) %>% tab_header(title = md("**Infracciones penales año 2019**"),subtitle = md("**Total Nacional**")) %>%
+  tab_options(heading.background.color = "orange", column_labels.font.weight = "bold")
+
+
+Tabla_TotalInfracciones18 <- TotalInfracciones18 %>% gt()
+
+Tabla_TotalInfracciones18 <- TotalInfracciones18 %>% add_column(ImagenDelitos) %>% 
+  select("Total Nacional", "A2018" , "ImagenDelitos") %>% ungroup()
+
+Tabla_TotalInfracciones18 %>% gt() %>% 
+  gt::text_transform(locations = cells_body(columns = vars(ImagenDelitos)),
+                     fn = function(x) {gt::web_image(x, height = 50)}) %>% tab_header(title = md("**Infracciones penales año 2018**"),subtitle = md("**Total Nacional**")) %>%
+  tab_options(heading.background.color = "orange", column_labels.font.weight = "bold")
+
+
+Tabla_TotalInfracciones17 <- TotalInfracciones17 %>% gt()
+
+Tabla_TotalInfracciones17 <- TotalInfracciones17 %>% add_column(ImagenDelitos) %>% 
+  select("Total Nacional", "A2017" , "ImagenDelitos") %>% ungroup()
+
+Tabla_TotalInfracciones17 %>% gt() %>% 
+  gt::text_transform(locations = cells_body(columns = vars(ImagenDelitos)),
+                     fn = function(x) {gt::web_image(x, height = 50)}) %>% tab_header(title = md("**Infracciones penales año 2017**"),subtitle = md("**Total Nacional**")) %>%
+  tab_options(heading.background.color = "orange", column_labels.font.weight = "bold")
+
+
+Tabla_TotalInfracciones16 <- TotalInfracciones16 %>% gt()
+
+Tabla_TotalInfracciones16 <- TotalInfracciones16 %>% add_column(ImagenDelitos) %>% 
+  select("Total Nacional", "A2016" , "ImagenDelitos") %>% ungroup()
+
+Tabla_TotalInfracciones16 %>% gt() %>% 
+  gt::text_transform(locations = cells_body(columns = vars(ImagenDelitos)),
+                     fn = function(x) {gt::web_image(x, height = 50)}) %>% tab_header(title = md("**Infracciones penales año 2016**"),subtitle = md("**Total Nacional**")) %>%
+  tab_options(heading.background.color = "orange", column_labels.font.weight = "bold")
+
+
+```
+
+<div/>
+
+Las tablas muestran de una forma resumida el número de infracciones totales para los últimos 4 años, excluyendo el 2020. 
+
+
+
+Este gráfico interactivo muestra el Total de Infracciones cometidas (Delitos) atendiendo a la Comunidad autónoma durante el año 2019. Podemos observar como Andalucía es la comunidad autónoma donde se registran mayor número de delitos, seguido por la Comunidad de Madrid y la Comunidad Valenciana. 
+
+```{r eval = TRUE, echo = TRUE}
+#importamos los datos
+EvolucionDelitosEspaña<-  rio::import("./datos/DATOSCOMUNIDADAUTO.csv")
+
+EvolucionDelitosESP <-  rio::import("./datos/EvolucionESP.csv")
+
+GraficoEvolucionDelitos = EvolucionDelitosESP[!44]
+
+
+
+EvolucionDelitosEspa<-  rio::import("./datos/DATOSCOMUNIDADAUTO.csv")
+
+EvolucionDelitosESP <-  rio::import("./datos/EvolucionESP.csv")
+
+#LIMPIAMOS DATOS, eliminando todas las filas que contienen valores nulos NA y cambiamos nombres de columnas
+
+EvolucionDelitosComuni <- na.omit(EvolucionDelitosEspa)
+
+EvolucionInfraEsp <- rio::import("./datos/EvolucionInfraccionesESP.csv")
+
+names(EvolucionInfraEsp)
+colnames(EvolucionInfraEsp)[3] <- "Fechas"
+
+# Define the number of colors you want
+nb.cols <- 19
+mycolors <- colorRampPalette(brewer.pal(8, "Set2"))(nb.cols)
+# Create a ggplot with 18 colors 
+
+
+Comuni2019 <- EvolucionDelitosComuni %>% group_by(Comunidades, A2019)
+
+library(plotly)
+grComuni2019 <- ggplot(Comuni2019, aes(A2019,Comunidades, fill = Comunidades)) + scale_fill_manual(values = mycolors) + geom_col(position = "dodge") + labs(x = "Infracciones", y = "Comunidades", title = "Delitos por comunidades en 2019") + theme_bw() + theme(plot.title = element_text(hjust = 0))
+grComuni2019
+
+
+
+```
+                 
+En este mapa se encuentra geolocalizadas las todas las Comunidades Autónomas y muestran con un pop-up el total de Infracciones penales cometidas durante el año 2019 en dicha región.   
+
+```{r eval = TRUE, echo = TRUE}
+
+MapaDelitosEspaña <- leaflet() %>%
+  setView(lng = -5.99629, lat = 37.3826, zoom = 5) %>% 
+  addMarkers(lng = -5.99629, lat = 37.3826 , popup = "ANDALUCÍA-89.729")%>%
+  setView(lng = -0.876566, lat = 41.6563, zoom = 5) %>% 
+  addMarkers(lng = -0.876566, lat = 41.6563 , popup = "ARAGÓN-10.891") %>% 
+  setView(lng = -5.84476, lat = 43.36029, zoom = 5) %>% 
+  addMarkers(lng = -5.84476, lat = 43.36029 , popup = "PRINCIPADO DE ASTURIAS-8.143")%>%
+  setView(lng = 2.65024, lat = 39.56939, zoom = 5) %>% 
+  addMarkers(lng = 2.65024, lat = 39.56939 , popup = "BALEARES-15.306") %>% 
+  setView(lng = -15.5000000, lat = 28.0000000, zoom = 5) %>% 
+  addMarkers(lng = -15.5000000, lat = 28.0000000 , popup = "CANARIAS-24.731")%>%
+  setView(lng = -3.80444, lat = 43.46472, zoom = 5) %>% 
+  addMarkers(lng = -3.80444, lat = 43.46472 , popup = "CANTABRIA-4.139") %>% 
+  setView(lng = -4.72372, lat = 41.65518, zoom = 5) %>% 
+  addMarkers(lng = -4.72372, lat = 41.65518 , popup = "CASTILLA Y LEON-16.860")%>%
+  setView(lng = -1.85643, lat = 38.99424, zoom = 5) %>% 
+  addMarkers(lng = -1.85643, lat = 38.99424 , popup = "CASTILLA LA MANCHA-19.638") %>% 
+  setView(lng = 2.16992, lat = 41.3879, zoom = 5) %>% 
+  addMarkers(lng = 2.16992, lat = 41.3879 , popup = "CATALUÑA-38.424")%>%
+  setView(lng = -0.376805, lat = 39.4702, zoom = 5) %>% 
+  addMarkers(lng = -0.376805, lat = 39.4702 , popup = "COMUNITAT VALENCIANA-50.416") %>%  
+  setView(lng = -6.4230578, lat = 38.9743700, zoom = 5) %>% 
+  addMarkers(lng = -6.4230578, lat = 38.9743700 , popup = "EXTREMADURA-8.284")%>%
+  setView(lng = -8.54569, lat = 42.88052, zoom = 5) %>% 
+  addMarkers(lng = -8.54569, lat = 42.88052 , popup = "GALICIA-18.565") %>%   
+  setView(lng = -3.70256, lat = 40.4165, zoom = 5) %>% 
+  addMarkers(lng = -3.70256, lat = 40.4165 , popup = "COMUNIDAD DE MADRID-73.308")%>%
+  setView(lng = -1.1300400, lat = 37.9870400, zoom = 5) %>% 
+  addMarkers(lng = -1.1300400, lat = 37.9870400 , popup = "MURCIA-15.770") %>% 
+  setView(lng = -1.64323, lat = 42.81687, zoom = 5) %>% 
+  addMarkers(lng = -1.64323, lat = 42.81687 , popup = "NAVARRA-4.500")%>%
+  setView(lng = -2.67268, lat = 42.84998, zoom = 5) %>% 
+  addMarkers(lng = -2.67268, lat = 42.84998 , popup = "PAIS VASCO-5.128") %>%  
+  setView(lng = -2.4500000, lat = 42.4666700, zoom = 5) %>% 
+  addMarkers(lng = -2.4500000, lat = 42.4666700 , popup = "RIOJA-3.120")%>%
+  setView(lng = -5.32042, lat = 35.88919, zoom = 5) %>% 
+  addMarkers(lng = -5.32042, lat = 35.88919 , popup = "CIUDAD AUTÓNOMA DE CEUTA-2.162") %>%  
+  setView(lng = -2.93833, lat = 35.29369, zoom = 5) %>% 
+  addMarkers(lng = -2.93833, lat = 35.29369 , popup = "CIUDAD AUTÓNOMA DE MELILLA-2.789") %>% addTiles()
+
+MapaDelitosEspaña
+```
+
+
+
+# <FONT COLOR="Yellow">3. ¿Qué ha pasado en 2020? </FONT>
+
+Como decíamos, el 2020 ha sido un año atípico, la pandemia, el confinamiento y las restricciones sobre la movilidad han hecho efecto no solo sobre la economía, sino también sobre el número de delitos cometidos en nuestro país. Para el año 2020 se ha experimentado una fuerte caída en el número de Infracciones penales cometidas. En el primer trimestre de 2020, durante los meses que precedían el confinamiento ya se experimento una caída del 8,9% respecto al primer trimestre del año anterior. Esta caída sería mucho más pronunciada en los dos siguientes trimestres ( periodos para los que se dispone información actualmente). 
+
+
+Entre Enero y Junio la caída a nivel nacional es del 24,8%, todavía mayor en los grandes núcleos urbanos como es la capital u otras ciudades grandes. Como vemos en la tabla  de Enero a Septiembre la caída se recupera respecto a el año anterior debido al levantamiento de algunas restricciones a la movilidad, pero siguen siendo bastante alta. 
+
+
+```{r eval = TRUE, echo = TRUE}
+
+#importar datos
+
+#primer trimestre
+primertrimestreESP <- rio::import("./datos/primertrimestreESP.csv")
+
+names(primertrimestreESP)[4] <- "Variacion19%20"
+names(primertrimestreESP)[2] <- "EneroMarzo19"
+names(primertrimestreESP)[3] <- "EneroMarzo20"
+
+dfprimertrimestre <- primertrimestreESP %>%  slice(c(15))
+
+VarDelitosprimertri <- dfprimertrimestre
+
+VarDelitosprimertri %>% gt() %>% tab_header(title = md("**Variación Delitos 1er Trimestre 2020 y 2019**"),subtitle = md("**España**")) %>%
+  tab_options(heading.background.color = "black", column_labels.font.weight = "bold")
+
+
+#segundo trimestre
+
+segundotrimestreESP <- rio::import("./datos/segundotrimestreESP.csv")
+names(segundotrimestreESP)[4] <- "Variacion19%20"
+names(segundotrimestreESP)[2] <- "EneroJunio19"
+names(segundotrimestreESP)[3] <- "EneroJunio20"
+
+dfsegundotrimestre <- segundotrimestreESP %>%  slice(c(15))
+
+VarDelitossegundotri <- dfsegundotrimestre
+
+VarDelitossegundotri %>% gt() %>% tab_header(title = md("**Variación Delitos 2ndo Trimestre 2020 y 2019**"),subtitle = md("**España**")) %>%
+  tab_options(heading.background.color = "black", column_labels.font.weight = "bold")
+
+
+#tercer trimestre
+
+tercertrimestreESP <- rio::import("./datos/tercertrimestreESP.csv")
+names(tercertrimestreESP)[4] <- "Variacion19%20"
+names(tercertrimestreESP)[2] <- "EneroSeptiembre19"
+names(tercertrimestreESP)[3] <- "EneroSeptiembre20"
+
+dftercertrimestre <- tercertrimestreESP %>%  slice(c(15))
+
+VarDelitostercertri <- dftercertrimestre
+
+VarDelitostercertri %>% gt() %>% tab_header(title = md("**Variación Delitos 3er Trimestre 2020 y 2019**"),subtitle = md("**España**")) %>%
+  tab_options(heading.background.color = "black", column_labels.font.weight = "bold") 
+
+```
+
+<div style="text-align: justify"> 
+
+
+
+En esta tabla interactiva se puede observar la evolución de los Delitos cometidos durante los primeros 9 meses de 2020 respecto a los 9 primeros del año anterior, atendiendo a la tipología penal, y la comunidad (cada página recoge los datos de una comunidad autónoma). 
+
+
+```{r eval = TRUE, echo = TRUE}
+#REALIZAMOS UNA TABLA INTERACTIVA SEGUN LA COMUNIDAD, TIPOLOGIA PENAL Y PERIODOS
+
+DENEROSEPTIEMBRE20 <- rio::import("./datos/ENEROSEPTIEMBRE20.csv")
+
+names(DENEROSEPTIEMBRE20)[4] <- "Variacion19%20"
+names(DENEROSEPTIEMBRE20)[1] <- "C.AUTONOMA, TIPOLOGIA PENAL Y PERIODOS"
+
+
+dfEneroSeptiembre <- DENEROSEPTIEMBRE20 
+dfEneroSeptiembre %>% DT::datatable(extensions = 'Buttons', 
+                                     options = list(dom = 'Blfrtip', 
+                                                    buttons = c('copy', 'csv', 'excel', 'pdf', 'print'), 
+                                                    pageLength = 16, autoWidth = TRUE ))
+
+```
+
+<div/>
+
+Este gráfico muestra el total de infracciones penales según la tipología penal para los primeros 9 meses del 2020. 
+
+```{r eval = TRUE, echo = TRUE}
+#graficos para 2020 segun tipologia penal 
+
+ggplot(tercertrimestreESP,aes(Delitos,EneroSeptiembre20,color = Delitos,fill= Delitos)) +
+  geom_bar(position = "stack",  width =.18,stat="identity") +
+  coord_flip()+
+  geom_text(aes(label= EneroSeptiembre20 ,hjust=-.03,  colour="black"),size=3.2)+
+  theme(axis.line = element_line(color = "orange",size=1))+
+  theme(panel.background=element_blank())+
+  scale_x_discrete() +
+  xlab(NULL)+ylab(NULL)+
+  theme(legend.position = "none",
+        axis.text = element_text(size = 8,face="bold"),
+        plot.title = element_text(size=14,face = "bold")) +
+  ggtitle("Infracciones Penales Enero-Septiembre 2020 " ,subtitle = "Total Nacional")
+
+
+```
+
+# <FONT COLOR="Yellow"> 4. Conclusión </FONT>
+
+
+El confinamiento ha sido determinante en la caída del número de delitos registrados en nuestro país durante el 2020. Entre Marzo y Junio, meses durante los cuales las restricciones a la movilidad eran más extremas, la caída fue del 20,4%. Con el levantamiento de las restricciones en verano se registro una pequeña subida , aunque respecto al año anterior la caída sigue siendo del 20,2%. Como observamos en la última tabla interactiva, es especialmente relevamente la caída en el número de hurtos y robos en domicilio, debido a que la gente permanecía en cuarentena dentro de sus casas debido al estado de alarma.
+
+2020 ha sido un año complicado, del que dificilmente podemos extraer cosas positivas, salvo que el número de delitos se ha visto drasticamente reducido. Veremos que depara el año 2021. 
+
+
+```{r eval = TRUE, echo = FALSE}
+sessioninfo::session_info() %>% details::details(summary = 'current session info')
+```
